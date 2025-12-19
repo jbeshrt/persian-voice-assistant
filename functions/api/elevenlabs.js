@@ -34,7 +34,7 @@ export async function onRequestPost(context) {
         console.log('TTS Request for text:', text.substring(0, 50) + '...');
 
         // ElevenLabs API configuration
-        const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel voice (multilingual)
+        const VOICE_ID = 'cgSgspJ2msm6clMCkdW9'; // Jessica voice (multilingual - Persian support)
         const MODEL_ID = 'eleven_multilingual_v2'; // Supports Persian
 
         // Call ElevenLabs API
