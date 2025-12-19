@@ -13,6 +13,7 @@ class PersianVoiceAssistant {
         this.cardCollectionMode = false;
         this.cardData = {};
         this.waitingForCardConfirmation = false;
+        this.currentCardField = null; // 'cardNumber', 'cvv2', 'expireMonth', 'expireYear'
         
         this.initToken();
         this.initElements();
@@ -638,6 +639,7 @@ class PersianVoiceAssistant {
         this.cardCollectionMode = true;
         this.cardData = {};
         this.waitingForCardConfirmation = false;
+        this.currentCardField = 'cardNumber';
         this.speak('برای افزودن کارت جدید، لطفا شماره کارت ۱۶ رقمی خود را بگویید');
         this.updateStatus('در انتظار شماره کارت', 'listening');
     }
@@ -649,79 +651,121 @@ class PersianVoiceAssistant {
                 await this.saveCard(this.cardData);
                 this.cardCollectionMode = false;
                 this.waitingForCardConfirmation = false;
+                this.currentCardField = null;
                 return;
             } else if (transcript.includes('خیر') || transcript.includes('نه')) {
                 this.cardCollectionMode = false;
                 this.waitingForCardConfirmation = false;
                 this.cardData = {};
+                this.currentCardField = null;
                 await this.speak('عملیات لغو شد');
                 return;
             }
         }
 
-        // Try to extract all card info at once
+        // Try to extract all card info at once from the transcript
         const extracted = this.extractCardInfo(transcript);
         
-        // Merge with existing data
-        if (extracted.cardNumber) this.cardData.cardNumber = extracted.cardNumber;
-        if (extracted.cvv2) this.cardData.cvv2 = extracted.cvv2;
-        if (extracted.expireMonth) this.cardData.expireMonth = extracted.expireMonth;
-        if (extracted.expireYear) this.cardData.expireYear = extracted.expireYear;
+        // If user is providing specific field based on context
+        if (this.currentCardField) {
+            // Extract based on what we're asking for
+            if (this.currentCardField === 'cardNumber' && extracted.cardNumber) {
+                this.cardData.cardNumber = extracted.cardNumber;
+                console.log('Captured card number:', this.cardData.cardNumber);
+            } else if (this.currentCardField === 'cvv2' && extracted.cvv2) {
+                this.cardData.cvv2 = extracted.cvv2;
+                console.log('Captured CVV2:', this.cardData.cvv2);
+            } else if (this.currentCardField === 'expireMonth' && extracted.expireMonth) {
+                this.cardData.expireMonth = extracted.expireMonth;
+                console.log('Captured expire month:', this.cardData.expireMonth);
+            } else if (this.currentCardField === 'expireYear' && extracted.expireYear) {
+                this.cardData.expireYear = extracted.expireYear;
+                console.log('Captured expire year:', this.cardData.expireYear);
+            }
+        } else {
+            // User might be providing all data at once - try to extract everything
+            if (extracted.cardNumber) this.cardData.cardNumber = extracted.cardNumber;
+            if (extracted.cvv2) this.cardData.cvv2 = extracted.cvv2;
+            if (extracted.expireMonth) this.cardData.expireMonth = extracted.expireMonth;
+            if (extracted.expireYear) this.cardData.expireYear = extracted.expireYear;
+            console.log('Extracted all-at-once:', this.cardData);
+        }
         
-        // Check what's missing and ask for it
+        // Now check what's missing and ask for next field with context
         if (!this.cardData.cardNumber) {
-            await this.speak('لطفا شماره کارت ۱۶ رقمی خود را بگویید');
+            this.currentCardField = 'cardNumber';
+            await this.speak('لطفا شماره کارت ۱۶ رقمی خود را بگویید. مثال: ۱۲۳۴ ۵۶۷۸ ۹۰۱۲ ۳۴۵۶');
+            this.updateStatus('در انتظار شماره کارت', 'listening');
             return;
         }
         
         if (!this.cardData.cvv2) {
-            await this.speak('لطفا سی وی وی دو یا کد امنیتی سه رقمی پشت کارت را بگویید');
+            this.currentCardField = 'cvv2';
+            const msg = `بسیار خوب. شماره کارت ${this.maskCardNumber(this.cardData.cardNumber)} ثبت شد. حالا لطفا سی وی وی دو یا کد امنیتی سه یا چهار رقمی پشت کارت را بگویید`;
+            await this.speak(msg);
+            this.updateStatus('در انتظار CVV2', 'listening');
             return;
         }
         
         if (!this.cardData.expireMonth) {
-            await this.speak('لطفا ماه انقضای کارت را بگویید، مثلا: صفر نه');
+            this.currentCardField = 'expireMonth';
+            const msg = `عالی. سی وی وی دو ${this.cardData.cvv2} ثبت شد. حالا لطفا ماه انقضای کارت را دو رقمی بگویید. مثال: صفر نه برای ماه سپتامبر یا یک صفر برای ماه اکتبر`;
+            await this.speak(msg);
+            this.updateStatus('در انتظار ماه انقضا', 'listening');
             return;
         }
         
         if (!this.cardData.expireYear) {
-            await this.speak('لطفا سال انقضای کارت را دو رقمی بگویید، مثلا: صفر پنج');
+            this.currentCardField = 'expireYear';
+            const msg = `خوب. ماه ${this.cardData.expireMonth} ثبت شد. حالا لطفا سال انقضای کارت را دو رقمی بگویید. مثال: صفر پنج برای سال ۲۰۰۵ یا دو شش برای سال ۲۰۲۶`;
+            await this.speak(msg);
+            this.updateStatus('در انتظار سال انقضا', 'listening');
             return;
         }
         
-        // All data collected, read back and confirm
-        const confirmMsg = `اطلاعات کارت شما: 
-                           شماره کارت ${this.maskCardNumber(this.cardData.cardNumber)}, 
-                           سی وی وی دو ${this.cardData.cvv2}, 
-                           تاریخ انقضا ماه ${this.cardData.expireMonth} سال ${this.cardData.expireYear}. 
-                           آیا تایید می‌کنید؟ بله یا خیر بگویید.`;
+        // All data collected - read back with full context for confirmation
+        this.currentCardField = null;
+        const confirmMsg = `اطلاعات کارت شما کامل شد. اجازه بدهید بررسی کنم: 
+                           شماره کارت: ${this.maskCardNumber(this.cardData.cardNumber)}, 
+                           کد امنیتی سی وی وی دو: ${this.cardData.cvv2}, 
+                           تاریخ انقضا: ماه ${this.cardData.expireMonth} سال ${this.cardData.expireYear}. 
+                           آیا این اطلاعات را تایید می‌کنید؟ لطفا بله یا خیر بگویید.`;
         
         await this.speak(confirmMsg);
+        this.updateStatus('در انتظار تایید', 'listening');
         this.waitingForCardConfirmation = true;
     }
 
     extractCardInfo(text) {
         const info = {};
         
-        // Remove spaces and Persian number conversions
-        const normalizedText = text.replace(/\s/g, '');
+        // Remove extra spaces
+        const cleanText = text.trim();
         
-        // Extract 16-digit card number
-        const cardMatch = text.match(/(\d{16})|(\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/);
+        // Extract 16-digit card number (with or without spaces)
+        const cardMatch = cleanText.match(/(\d{16})|(\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/);
         if (cardMatch) {
             info.cardNumber = cardMatch[0].replace(/\s/g, '');
         }
         
-        // Extract CVV2 (3-4 digits) - look for patterns
+        // Extract CVV2 (3-4 digits) - multiple patterns
         const cvvPatterns = [
             /(?:سی\s*وی\s*وی|cvv|سیویتو|امنیتی)\s*:?\s*(\d{3,4})/i,
             /(\d{3,4})\s*(?:cvv|سیویتو)/i
         ];
         for (const pattern of cvvPatterns) {
-            const match = text.match(pattern);
+            const match = cleanText.match(pattern);
             if (match) {
                 info.cvv2 = match[1];
                 break;
+            }
+        }
+        
+        // If we're specifically looking for CVV2 and got a 3-4 digit number alone
+        if (!info.cvv2 && this.currentCardField === 'cvv2') {
+            const standaloneMatch = cleanText.match(/^(\d{3,4})$/);
+            if (standaloneMatch) {
+                info.cvv2 = standaloneMatch[1];
             }
         }
         
@@ -731,12 +775,23 @@ class PersianVoiceAssistant {
             /(\d{1,2})\s*(?:ماه|month)/i
         ];
         for (const pattern of monthPatterns) {
-            const match = text.match(pattern);
+            const match = cleanText.match(pattern);
             if (match) {
                 const month = parseInt(match[1]);
                 if (month >= 1 && month <= 12) {
                     info.expireMonth = month.toString().padStart(2, '0');
                     break;
+                }
+            }
+        }
+        
+        // If we're specifically looking for month and got a 1-2 digit number
+        if (!info.expireMonth && this.currentCardField === 'expireMonth') {
+            const standaloneMatch = cleanText.match(/^(\d{1,2})$/);
+            if (standaloneMatch) {
+                const month = parseInt(standaloneMatch[1]);
+                if (month >= 1 && month <= 12) {
+                    info.expireMonth = month.toString().padStart(2, '0');
                 }
             }
         }
@@ -747,10 +802,18 @@ class PersianVoiceAssistant {
             /(\d{2})\s*(?:سال|year)/i
         ];
         for (const pattern of yearPatterns) {
-            const match = text.match(pattern);
+            const match = cleanText.match(pattern);
             if (match) {
                 info.expireYear = match[1];
                 break;
+            }
+        }
+        
+        // If we're specifically looking for year and got a 2 digit number
+        if (!info.expireYear && this.currentCardField === 'expireYear') {
+            const standaloneMatch = cleanText.match(/^(\d{2})$/);
+            if (standaloneMatch) {
+                info.expireYear = standaloneMatch[1];
             }
         }
         
