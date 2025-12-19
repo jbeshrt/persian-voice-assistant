@@ -1,5 +1,11 @@
 # 🎤 Persian Voice Payment Assistant - Complete SaaS
 
+## 🔗 Links
+
+- **GitHub Repository:** https://github.com/jbeshrt/persian-voice-assistant
+- **Production URL:** https://06cd1a34.persian-voice-assistant.pages.dev
+- **Documentation:** [Deployment Guide](DEPLOYMENT.md) • [Testing Guide](TESTING.md) • [Git Setup](GIT_SETUP.md) • [Agent Policies](agents.md)
+
 ## 🌟 Project Summary
 
 A fully functional Persian voice-activated payment assistant deployed on Cloudflare Pages. Users can make payments by speaking in Persian, and the system processes, logs, and responds via voice.
