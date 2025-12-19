@@ -37,7 +37,7 @@ export async function onRequestPost(context) {
         // ElevenLabs API configuration
         const API_KEY = env.ELEVENLABS_API_KEY || 'sk_dd205ee3e9c8d886817abaada6bb67c25464c03b8496826f';
         const VOICE_ID = 'cgSgspJ2msm6clMCkdW9'; // Jessica voice (multilingual - Persian support)
-        const MODEL_ID = 'eleven_multilingual_v2'; // Supports Persian
+        const MODEL_ID = 'eleven_turbo_v2_5'; // Supports Persian with language_code
         
         // Cloudflare AI Gateway configuration
         const ACCOUNT_ID = '5dfc6fee3a7d9541e75526075602906a';
