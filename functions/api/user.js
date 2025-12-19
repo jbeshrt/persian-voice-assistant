@@ -53,6 +53,15 @@ export async function onRequestGet(context) {
             ).bind(user.id).run();
         }
 
+        // Get user's saved cards
+        const cards = await env.DB.prepare(
+            `SELECT id, substr(card_number, -4) as last_four, 
+                    card_number, expire_month, expire_year, card_name, is_default, created_at
+             FROM cards 
+             WHERE user_id = ? 
+             ORDER BY is_default DESC, created_at DESC`
+        ).bind(user.id).all();
+
         // Get user's transaction history
         const transactions = await env.DB.prepare(
             `SELECT id, timestamp, card_number, amount, currency, payment_type, 
@@ -72,6 +81,8 @@ export async function onRequestGet(context) {
                     created_at: user.created_at,
                     last_active: user.last_active
                 },
+                cards: cards.results || [],
+                card_count: cards.results?.length || 0,
                 transactions: transactions.results || [],
                 transaction_count: transactions.results?.length || 0
             }),

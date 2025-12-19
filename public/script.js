@@ -9,6 +9,10 @@ class PersianVoiceAssistant {
         this.lastLoggedTime = -1;
         this.userToken = null;
         this.userId = null;
+        this.savedCards = [];
+        this.cardCollectionMode = false;
+        this.cardData = {};
+        this.waitingForCardConfirmation = false;
         
         this.initToken();
         this.initElements();
@@ -61,7 +65,14 @@ class PersianVoiceAssistant {
             if (data.success) {
                 this.userId = data.user.id;
                 console.log('User loaded:', data.user);
+                console.log('Card count:', data.card_count);
                 console.log('Transaction count:', data.transaction_count);
+
+                // Display saved cards
+                if (data.cards && data.cards.length > 0) {
+                    this.savedCards = data.cards;
+                    this.displayCards();
+                }
 
                 // Display transaction history
                 if (data.transactions && data.transactions.length > 0) {
@@ -101,11 +112,13 @@ class PersianVoiceAssistant {
         this.stopBtn = document.getElementById('stopBtn');
         this.testBtn = document.getElementById('testBtn');
         this.testApiBtn = document.getElementById('testApiBtn');
+        this.addCardBtn = document.getElementById('addCardBtn');
         this.statusText = document.getElementById('statusText');
         this.statusIndicator = document.getElementById('statusIndicator').querySelector('.pulse');
         this.transcriptBox = document.getElementById('transcript');
         this.responseBox = document.getElementById('response');
         this.paymentLog = document.getElementById('paymentLog');
+        this.cardsContainer = document.getElementById('savedCards');
     }
 
     initSpeechRecognition() {
@@ -157,6 +170,11 @@ class PersianVoiceAssistant {
         this.stopBtn.addEventListener('click', () => this.stopListening());
         this.testBtn.addEventListener('click', () => this.testAudio());
         this.testApiBtn.addEventListener('click', () => this.testApiConnection());
+        
+        // Add card button
+        if (this.addCardBtn) {
+            this.addCardBtn.addEventListener('click', () => this.startCardCollection());
+        }
     }
 
     async testApiConnection() {
@@ -239,11 +257,23 @@ class PersianVoiceAssistant {
     }
 
     async processCommand(transcript) {
+        // Handle card collection mode first
+        if (this.cardCollectionMode) {
+            await this.handleCardCollection(transcript);
+            return;
+        }
+
         // Simple payment detection (looking for keywords)
         const lowerTranscript = transcript.toLowerCase();
         
         // Check if it's a payment command
         if (this.containsPaymentKeywords(lowerTranscript)) {
+            // Check if user has saved cards first
+            const hasCards = await this.checkCardsBeforePayment();
+            if (!hasCards) {
+                return; // Card collection will start automatically
+            }
+
             const paymentData = this.extractPaymentInfo(transcript);
             
             if (paymentData) {
@@ -567,6 +597,248 @@ class PersianVoiceAssistant {
 
     generateSessionId() {
         return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    // ========== Card Management Methods ==========
+
+    displayCards() {
+        if (!this.cardsContainer) return;
+        
+        this.cardsContainer.innerHTML = '';
+        
+        if (this.savedCards.length === 0) {
+            this.cardsContainer.innerHTML = '<p class="no-cards">هیچ کارتی ذخیره نشده است</p>';
+            return;
+        }
+        
+        this.savedCards.forEach(card => {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'saved-card';
+            cardEl.innerHTML = `
+                <div class="card-info">
+                    <span class="card-number">**** **** **** ${card.last_four}</span>
+                    <span class="card-expiry">انقضا: ${card.expire_month}/${card.expire_year}</span>
+                    ${card.card_name ? `<span class="card-name">${card.card_name}</span>` : ''}
+                    ${card.is_default ? '<span class="badge">پیش‌فرض</span>' : ''}
+                </div>
+                <button class="delete-card-btn" data-id="${card.id}">🗑️</button>
+            `;
+            this.cardsContainer.appendChild(cardEl);
+        });
+        
+        // Add delete handlers
+        document.querySelectorAll('.delete-card-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.deleteCard(e.target.dataset.id);
+            });
+        });
+    }
+
+    startCardCollection() {
+        this.cardCollectionMode = true;
+        this.cardData = {};
+        this.waitingForCardConfirmation = false;
+        this.speak('برای افزودن کارت جدید، لطفا شماره کارت ۱۶ رقمی خود را بگویید');
+        this.updateStatus('در انتظار شماره کارت', 'listening');
+    }
+
+    async handleCardCollection(transcript) {
+        // If waiting for confirmation
+        if (this.waitingForCardConfirmation) {
+            if (transcript.includes('بله') || transcript.includes('تایید') || transcript.includes('آره')) {
+                await this.saveCard(this.cardData);
+                this.cardCollectionMode = false;
+                this.waitingForCardConfirmation = false;
+                return;
+            } else if (transcript.includes('خیر') || transcript.includes('نه')) {
+                this.cardCollectionMode = false;
+                this.waitingForCardConfirmation = false;
+                this.cardData = {};
+                await this.speak('عملیات لغو شد');
+                return;
+            }
+        }
+
+        // Try to extract all card info at once
+        const extracted = this.extractCardInfo(transcript);
+        
+        // Merge with existing data
+        if (extracted.cardNumber) this.cardData.cardNumber = extracted.cardNumber;
+        if (extracted.cvv2) this.cardData.cvv2 = extracted.cvv2;
+        if (extracted.expireMonth) this.cardData.expireMonth = extracted.expireMonth;
+        if (extracted.expireYear) this.cardData.expireYear = extracted.expireYear;
+        
+        // Check what's missing and ask for it
+        if (!this.cardData.cardNumber) {
+            await this.speak('لطفا شماره کارت ۱۶ رقمی خود را بگویید');
+            return;
+        }
+        
+        if (!this.cardData.cvv2) {
+            await this.speak('لطفا سی وی وی دو یا کد امنیتی سه رقمی پشت کارت را بگویید');
+            return;
+        }
+        
+        if (!this.cardData.expireMonth) {
+            await this.speak('لطفا ماه انقضای کارت را بگویید، مثلا: صفر نه');
+            return;
+        }
+        
+        if (!this.cardData.expireYear) {
+            await this.speak('لطفا سال انقضای کارت را دو رقمی بگویید، مثلا: صفر پنج');
+            return;
+        }
+        
+        // All data collected, read back and confirm
+        const confirmMsg = `اطلاعات کارت شما: 
+                           شماره کارت ${this.maskCardNumber(this.cardData.cardNumber)}, 
+                           سی وی وی دو ${this.cardData.cvv2}, 
+                           تاریخ انقضا ماه ${this.cardData.expireMonth} سال ${this.cardData.expireYear}. 
+                           آیا تایید می‌کنید؟ بله یا خیر بگویید.`;
+        
+        await this.speak(confirmMsg);
+        this.waitingForCardConfirmation = true;
+    }
+
+    extractCardInfo(text) {
+        const info = {};
+        
+        // Remove spaces and Persian number conversions
+        const normalizedText = text.replace(/\s/g, '');
+        
+        // Extract 16-digit card number
+        const cardMatch = text.match(/(\d{16})|(\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/);
+        if (cardMatch) {
+            info.cardNumber = cardMatch[0].replace(/\s/g, '');
+        }
+        
+        // Extract CVV2 (3-4 digits) - look for patterns
+        const cvvPatterns = [
+            /(?:سی\s*وی\s*وی|cvv|سیویتو|امنیتی)\s*:?\s*(\d{3,4})/i,
+            /(\d{3,4})\s*(?:cvv|سیویتو)/i
+        ];
+        for (const pattern of cvvPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                info.cvv2 = match[1];
+                break;
+            }
+        }
+        
+        // Extract expire month (01-12)
+        const monthPatterns = [
+            /(?:ماه|month)\s*:?\s*(\d{1,2})/i,
+            /(\d{1,2})\s*(?:ماه|month)/i
+        ];
+        for (const pattern of monthPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                const month = parseInt(match[1]);
+                if (month >= 1 && month <= 12) {
+                    info.expireMonth = month.toString().padStart(2, '0');
+                    break;
+                }
+            }
+        }
+        
+        // Extract expire year (2 digits)
+        const yearPatterns = [
+            /(?:سال|year)\s*:?\s*(\d{2})/i,
+            /(\d{2})\s*(?:سال|year)/i
+        ];
+        for (const pattern of yearPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                info.expireYear = match[1];
+                break;
+            }
+        }
+        
+        return info;
+    }
+
+    maskCardNumber(cardNumber) {
+        if (!cardNumber || cardNumber.length < 4) return '****';
+        return '**** **** **** ' + cardNumber.slice(-4);
+    }
+
+    async saveCard(cardData) {
+        try {
+            console.log('Saving card...');
+            
+            const response = await fetch('/api/cards', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: this.userToken,
+                    cardNumber: cardData.cardNumber,
+                    cvv2: cardData.cvv2,
+                    expireMonth: cardData.expireMonth,
+                    expireYear: cardData.expireYear,
+                    cardName: cardData.cardName || null,
+                    setAsDefault: this.savedCards.length === 0
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                await this.speak('کارت شما با موفقیت ذخیره شد');
+                // Reload cards
+                const userData = await fetch(`/api/user?token=${this.userToken}`);
+                const data = await userData.json();
+                if (data.success && data.cards) {
+                    this.savedCards = data.cards;
+                    this.displayCards();
+                }
+                this.cardCollectionMode = false;
+                this.cardData = {};
+            } else {
+                await this.speak('خطا در ذخیره کارت: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Error saving card:', error);
+            await this.speak('خطا در ذخیره کارت');
+        }
+    }
+
+    async deleteCard(cardId) {
+        if (!confirm('آیا از حذف این کارت اطمینان دارید؟')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/cards?token=${this.userToken}&id=${cardId}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Reload cards
+                const userData = await fetch(`/api/user?token=${this.userToken}`);
+                const data = await userData.json();
+                if (data.success && data.cards) {
+                    this.savedCards = data.cards;
+                    this.displayCards();
+                }
+                await this.speak('کارت حذف شد');
+            } else {
+                await this.speak('خطا در حذف کارت');
+            }
+        } catch (error) {
+            console.error('Error deleting card:', error);
+            await this.speak('خطا در حذف کارت');
+        }
+    }
+
+    async checkCardsBeforePayment() {
+        if (this.savedCards.length === 0) {
+            await this.speak('شما هیچ کارتی ذخیره نکرده‌اید. ابتدا باید یک کارت اضافه کنید. لطفا اطلاعات کارت خود را بگویید');
+            this.startCardCollection();
+            return false;
+        }
+        return true;
     }
 }
 
