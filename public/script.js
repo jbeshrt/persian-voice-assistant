@@ -640,6 +640,7 @@ class PersianVoiceAssistant {
         this.cardData = {};
         this.waitingForCardConfirmation = false;
         this.currentCardField = 'cardNumber';
+        // Example for agent: 1234 5678 9012 3456 - but don't say this to user
         this.speak('برای افزودن کارت جدید، لطفا شماره کارت ۱۶ رقمی خود را بگویید');
         this.updateStatus('در انتظار شماره کارت', 'listening');
     }
@@ -694,7 +695,8 @@ class PersianVoiceAssistant {
         // Now check what's missing and ask for next field with context
         if (!this.cardData.cardNumber) {
             this.currentCardField = 'cardNumber';
-            await this.speak('لطفا شماره کارت ۱۶ رقمی خود را بگویید. مثال: ۱۲۳۴ ۵۶۷۸ ۹۰۱۲ ۳۴۵۶');
+            // Example for agent: 1234 5678 9012 3456 - but don't say this to user
+            await this.speak('لطفا شماره کارت ۱۶ رقمی خود را بگویید');
             this.updateStatus('در انتظار شماره کارت', 'listening');
             return;
         }
@@ -702,7 +704,8 @@ class PersianVoiceAssistant {
         if (!this.cardData.cvv2) {
             this.currentCardField = 'cvv2';
             const lastFour = this.readDigitByDigit(this.cardData.cardNumber.slice(-4));
-            const msg = `بسیار خوب. شماره کارت با اعداد ${lastFour} ثبت شد. حالا لطفا سی وی وی دو یا کد امنیتی سه یا چهار رقمی پشت کارت را بگویید`;
+            // CVV2 is 3 or 4 digits - agent understands this but don't give example to user
+            const msg = `بسیار خوب. شماره کارت با اعداد آخر ${lastFour} ثبت شد. حالا لطفا کد امنیتی سه یا چهار رقمی پشت کارت را بگویید`;
             await this.speak(msg);
             this.updateStatus('در انتظار CVV2', 'listening');
             return;
@@ -711,7 +714,8 @@ class PersianVoiceAssistant {
         if (!this.cardData.expireMonth) {
             this.currentCardField = 'expireMonth';
             const cvv = this.readDigitByDigit(this.cardData.cvv2);
-            const msg = `عالی. سی وی وی دو ${cvv} ثبت شد. حالا لطفا ماه انقضای کارت را دو رقمی بگویید. مثال: صفر نه یعنی ماه نه`;
+            // Month should be 01-12, two digits - agent understands but don't give example
+            const msg = `عالی. کد امنیتی ${cvv} ثبت شد. حالا لطفا ماه انقضای کارت را دو رقمی بگویید`;
             await this.speak(msg);
             this.updateStatus('در انتظار ماه انقضا', 'listening');
             return;
@@ -720,7 +724,8 @@ class PersianVoiceAssistant {
         if (!this.cardData.expireYear) {
             this.currentCardField = 'expireYear';
             const month = this.readDigitByDigit(this.cardData.expireMonth);
-            const msg = `خوب. ماه ${month} ثبت شد. حالا لطفا سال انقضای کارت را دو رقمی بگویید. مثال: صفر پنج یعنی سال پنج`;
+            // Year should be 2 digits - agent understands but don't give example
+            const msg = `خوب. ماه ${month} ثبت شد. حالا لطفا سال انقضای کارت را دو رقمی بگویید`;
             await this.speak(msg);
             this.updateStatus('در انتظار سال انقضا', 'listening');
             return;
