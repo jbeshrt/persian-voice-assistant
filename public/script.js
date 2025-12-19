@@ -6,6 +6,7 @@ class PersianVoiceAssistant {
         this.isListening = false;
         this.sessionId = this.generateSessionId();
         this.currentTranscript = '';
+        this.lastLoggedTime = -1;
         
         this.initElements();
         this.initSpeechRecognition();
@@ -16,6 +17,7 @@ class PersianVoiceAssistant {
     initElements() {
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
+        this.testBtn = document.getElementById('testBtn');
         this.statusText = document.getElementById('statusText');
         this.statusIndicator = document.getElementById('statusIndicator').querySelector('.pulse');
         this.transcriptBox = document.getElementById('transcript');
@@ -70,6 +72,27 @@ class PersianVoiceAssistant {
     bindEvents() {
         this.startBtn.addEventListener('click', () => this.startListening());
         this.stopBtn.addEventListener('click', () => this.stopListening());
+        this.testBtn.addEventListener('click', () => this.testAudio());
+    }
+
+    async testAudio() {
+        console.log('=== AUDIO TEST STARTED ===');
+        this.testBtn.disabled = true;
+        
+        // Test 1: Simple text-to-speech
+        const testText = 'سلام! این یک تست صوتی است. آیا صدای من را می‌شنوید؟';
+        this.transcriptBox.textContent = 'تست: ' + testText;
+        
+        console.log('Test text:', testText);
+        
+        try {
+            await this.speak(testText);
+            console.log('=== AUDIO TEST COMPLETED SUCCESSFULLY ===');
+        } catch (error) {
+            console.error('=== AUDIO TEST FAILED ===', error);
+        } finally {
+            this.testBtn.disabled = false;
+        }
     }
 
     startListening() {
@@ -214,11 +237,21 @@ class PersianVoiceAssistant {
     }
 
     async speak(text) {
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🔊 SPEAK FUNCTION CALLED');
+        console.log('Text to speak:', text);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
         this.updateStatus('در حال صحبت...', 'speaking');
         this.responseBox.textContent = text;
 
         try {
-            console.log('Calling TTS API with text:', text.substring(0, 50) + '...');
+            console.log('📡 Step 1: Calling TTS API...');
+            console.log('Endpoint: /api/elevenlabs');
+            console.log('Method: POST');
+            console.log('Body:', JSON.stringify({ text: text.substring(0, 50) + '...' }));
+            
+            const fetchStartTime = Date.now();
             
             // Call ElevenLabs TTS API through our Pages Function
             const response = await fetch('/api/elevenlabs', {
@@ -229,57 +262,153 @@ class PersianVoiceAssistant {
                 body: JSON.stringify({ text })
             });
 
-            console.log('TTS API Response status:', response.status, response.statusText);
+            const fetchEndTime = Date.now();
+            console.log(`⏱️ Fetch took ${fetchEndTime - fetchStartTime}ms`);
+            console.log('📨 Step 2: Response received');
+            console.log('Status:', response.status, response.statusText);
+            console.log('Response OK:', response.ok);
+            console.log('Response headers:', {
+                'content-type': response.headers.get('content-type'),
+                'content-length': response.headers.get('content-length'),
+            });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('TTS API error response:', errorText);
+                console.error('❌ API Error Response:', errorText);
                 throw new Error(`TTS request failed: ${response.status} - ${errorText}`);
             }
 
-            // Get audio blob and play it
+            console.log('✅ Step 3: Converting response to blob...');
             const audioBlob = await response.blob();
-            console.log('Audio blob received:', audioBlob.size, 'bytes, type:', audioBlob.type);
+            console.log('📦 Audio blob created:');
+            console.log('  - Size:', audioBlob.size, 'bytes');
+            console.log('  - Type:', audioBlob.type);
+            console.log('  - Valid:', audioBlob.size > 0);
             
+            if (audioBlob.size === 0) {
+                throw new Error('Received empty audio blob from server');
+            }
+
+            console.log('🔗 Step 4: Creating object URL...');
             const audioUrl = URL.createObjectURL(audioBlob);
+            console.log('Object URL:', audioUrl);
+            
+            console.log('🎵 Step 5: Creating Audio element...');
             const audio = new Audio(audioUrl);
             
-            console.log('Starting audio playback...');
+            console.log('Audio element created:', {
+                src: audio.src,
+                readyState: audio.readyState,
+                networkState: audio.networkState
+            });
 
-            return new Promise((resolve) => {
-                audio.onended = () => {
-                    console.log('Audio playback completed');
-                    URL.revokeObjectURL(audioUrl);
-                    this.updateStatus('آماده شنیدن', 'ready');
-                    resolve();
+            return new Promise((resolve, reject) => {
+                let hasResolved = false;
+
+                const cleanup = () => {
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        URL.revokeObjectURL(audioUrl);
+                        console.log('🧹 Cleaned up object URL');
+                    }
                 };
-                audio.onerror = (e) => {
-                    console.error('Audio playback error:', e);
-                    console.error('Audio error details:', audio.error);
-                    this.updateStatus('خطا در پخش صدا', 'error');
-                    resolve();
+
+                audio.onloadedmetadata = () => {
+                    console.log('📊 Audio metadata loaded:');
+                    console.log('  - Duration:', audio.duration, 'seconds');
+                    console.log('  - Ready state:', audio.readyState);
                 };
+
                 audio.onloadeddata = () => {
-                    console.log('Audio data loaded, duration:', audio.duration);
+                    console.log('📥 Audio data loaded successfully');
                 };
-                audio.play().then(() => {
-                    console.log('Audio play() succeeded');
-                }).catch(error => {
-                    console.error('Audio play() error:', error);
-                    console.error('Error name:', error.name);
-                    console.error('Error message:', error.message);
-                    // Browser might block autoplay - show message to user
-                    alert('لطفا برای پخش صدا، دکمه را کلیک کنید. مرورگر پخش خودکار را مسدود کرده است.');
+
+                audio.oncanplay = () => {
+                    console.log('✅ Audio can start playing');
+                };
+
+                audio.onplay = () => {
+                    console.log('▶️ Audio playback started');
+                };
+
+                audio.onplaying = () => {
+                    console.log('🎶 Audio is now playing');
+                };
+
+                audio.ontimeupdate = () => {
+                    // Log every second
+                    if (Math.floor(audio.currentTime) !== this.lastLoggedTime) {
+                        this.lastLoggedTime = Math.floor(audio.currentTime);
+                        console.log(`⏰ Playing: ${audio.currentTime.toFixed(2)}s / ${audio.duration.toFixed(2)}s`);
+                    }
+                };
+
+                audio.onended = () => {
+                    console.log('✅ Audio playback completed');
+                    cleanup();
                     this.updateStatus('آماده شنیدن', 'ready');
                     resolve();
+                };
+
+                audio.onerror = (e) => {
+                    console.error('❌ Audio playback error event:', e);
+                    console.error('Audio error details:', {
+                        error: audio.error,
+                        code: audio.error?.code,
+                        message: audio.error?.message,
+                        readyState: audio.readyState,
+                        networkState: audio.networkState
+                    });
+                    cleanup();
+                    this.updateStatus('خطا در پخش صدا', 'error');
+                    reject(new Error(`Audio error: ${audio.error?.message || 'Unknown error'}`));
+                };
+
+                audio.onpause = () => {
+                    console.log('⏸️ Audio paused');
+                };
+
+                audio.onstalled = () => {
+                    console.warn('⚠️ Audio stalled');
+                };
+
+                audio.onsuspend = () => {
+                    console.log('💤 Audio suspended');
+                };
+
+                console.log('🎬 Step 6: Attempting to play audio...');
+                audio.play().then(() => {
+                    console.log('✅ audio.play() promise resolved - playback started successfully');
+                }).catch(error => {
+                    console.error('❌ audio.play() promise rejected:', error);
+                    console.error('Error details:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
+                    
+                    // Check if it's autoplay policy
+                    if (error.name === 'NotAllowedError') {
+                        console.error('🚫 Autoplay blocked by browser policy');
+                        alert('🔊 لطفا برای پخش صدا، دکمه تست صدا را دوباره کلیک کنید.\n\nمرورگر پخش خودکار را مسدود کرده است.');
+                    }
+                    
+                    cleanup();
+                    this.updateStatus('آماده شنیدن', 'ready');
+                    reject(error);
                 });
             });
 
         } catch (error) {
-            console.error('TTS error:', error);
+            console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.error('❌ SPEAK FUNCTION ERROR');
+            console.error('Error:', error);
+            console.error('Error type:', error.constructor.name);
+            console.error('Error message:', error.message);
             console.error('Error stack:', error.stack);
-            console.log('Fallback: Text displayed without audio');
+            console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             this.updateStatus('آماده شنیدن', 'ready');
+            throw error;
         }
     }
 
