@@ -31,7 +31,26 @@ export async function onRequestPost(context) {
             );
         }
 
-        console.log('TTS Request for text:', text.substring(0, 50) + '...');
+        console.log('=== TTS REQUEST STARTED ===');
+        console.log('Text:', text.substring(0, 50) + '...');
+
+        // Check if API key exists
+        if (!env.ELEVENLABS_API_KEY) {
+            console.error('❌ ELEVENLABS_API_KEY not found in environment');
+            return new Response(
+                JSON.stringify({ 
+                    error: 'API key not configured',
+                    details: 'ELEVENLABS_API_KEY environment variable is missing'
+                }),
+                { 
+                    status: 500,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                }
+            );
+        }
+
+        console.log('✅ API key present, length:', env.ELEVENLABS_API_KEY.length);
+        console.log('API key preview:', env.ELEVENLABS_API_KEY.substring(0, 10) + '...');
 
         // ElevenLabs API configuration
         const VOICE_ID = 'cgSgspJ2msm6clMCkdW9'; // Jessica voice (multilingual - Persian support)
