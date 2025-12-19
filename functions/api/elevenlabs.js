@@ -64,7 +64,7 @@ export async function onRequestPost(context) {
                     model_id: MODEL_ID,
                     language_code: 'fa',
                     voice_settings: {
-                        stability: 0.65,
+                        stability: 0.5,
                         similarity_boost: 0.85,
                         style: 0.3,
                         use_speaker_boost: true
