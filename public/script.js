@@ -14,6 +14,8 @@ class PersianVoiceAssistant {
         this.cardData = {};
         this.waitingForCardConfirmation = false;
         this.currentCardField = null; // 'cardNumber', 'cvv2', 'expireMonth', 'expireYear'
+        this.isSpeaking = false; // Global lock to prevent concurrent TTS requests
+        this.speakQueue = [];
         
         this.initToken();
         this.initElements();
@@ -441,10 +443,17 @@ class PersianVoiceAssistant {
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('🔊 SPEAK FUNCTION CALLED');
         console.log('Text to speak:', text);
+        console.log('Already speaking:', this.isSpeaking);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         
+        // CRITICAL: Prevent concurrent speak() calls
+        if (this.isSpeaking) {
+            console.warn('⚠️ Already speaking, ignoring duplicate request');
+            return;
+        }
+        
+        this.isSpeaking = true;
         this.updateStatus('در حال صحبت...', 'speaking');
-        this.responseBox.textContent = text;
 
         try {
             console.log('📡 Step 1: Calling TTS API...');
@@ -547,7 +556,8 @@ class PersianVoiceAssistant {
                 audio.onended = () => {
                     console.log('✅ Audio playback completed');
                     cleanup();
-                    this.updateStatus('آماده شنیدن', 'ready');
+                    this.isSpeaking = false;
+                    this.updateStatus('آماده شنیدن (کلیک کنید)', 'ready');
                     resolve();
                 };
 
@@ -561,6 +571,7 @@ class PersianVoiceAssistant {
                         networkState: audio.networkState
                     });
                     cleanup();
+                    this.isSpeaking = false;
                     this.updateStatus('خطا در پخش صدا', 'error');
                     reject(new Error(`Audio error: ${audio.error?.message || 'Unknown error'}`));
                 };
@@ -595,7 +606,8 @@ class PersianVoiceAssistant {
                     }
                     
                     cleanup();
-                    this.updateStatus('آماده شنیدن', 'ready');
+                    this.isSpeaking = false;
+                    this.updateStatus('آماده شنیدن (کلیک کنید)', 'ready');
                     reject(error);
                 });
             });
@@ -608,8 +620,12 @@ class PersianVoiceAssistant {
             console.error('Error message:', error.message);
             console.error('Error stack:', error.stack);
             console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            this.updateStatus('آماده شنیدن', 'ready');
+            this.updateStatus('آماده شنیدن (کلیک کنید)', 'ready');
             throw error;
+        } finally {
+            // ALWAYS release the speaking lock
+            this.isSpeaking = false;
+            console.log('✅ Speaking lock released');
         }
     }
 
