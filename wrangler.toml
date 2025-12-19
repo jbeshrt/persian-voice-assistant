@@ -1,0 +1,11 @@
+name = "persian-voice-assistant"
+compatibility_date = "2025-12-19"
+
+# Pages configuration
+pages_build_output_dir = "public"
+
+# D1 Database binding for payment logs
+[[d1_databases]]
+binding = "DB"
+database_name = "persian_payments"
+database_id = "d1c558d5-c0d8-41f0-8b1c-7411b72c7d35"

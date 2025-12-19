@@ -1,0 +1,16 @@
+{
+  "name": "persian-voice-assistant",
+  "version": "1.0.0",
+  "description": "Persian voice payment assistant on Cloudflare Pages",
+  "scripts": {
+    "dev": "wrangler pages dev public --live-reload",
+    "deploy": "wrangler pages deploy public --project-name=persian-voice-assistant",
+    "db:create": "wrangler d1 create persian_payments",
+    "db:migrate": "wrangler d1 execute persian_payments --file=schema.sql",
+    "db:migrate:remote": "wrangler d1 execute persian_payments --remote --file=schema.sql",
+    "tail": "wrangler pages deployment tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.84.0"
+  }
+}
