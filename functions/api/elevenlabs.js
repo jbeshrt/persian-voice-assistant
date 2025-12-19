@@ -37,6 +37,9 @@ export async function onRequestPost(context) {
         const VOICE_ID = 'cgSgspJ2msm6clMCkdW9'; // Jessica voice (multilingual - Persian support)
         const MODEL_ID = 'eleven_multilingual_v2'; // Supports Persian
 
+        console.log('Using voice ID:', VOICE_ID);
+        console.log('Using model:', MODEL_ID);
+
         // Call ElevenLabs API
         const elevenLabsResponse = await fetch(
             `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
@@ -60,11 +63,16 @@ export async function onRequestPost(context) {
             }
         );
 
+        console.log('ElevenLabs API response status:', elevenLabsResponse.status);
+        console.log('ElevenLabs API response headers:', Object.fromEntries(elevenLabsResponse.headers.entries()));
+
         if (!elevenLabsResponse.ok) {
             const errorText = await elevenLabsResponse.text();
             console.error('ElevenLabs API error:', errorText);
             throw new Error(`ElevenLabs API failed: ${elevenLabsResponse.status}`);
         }
+
+        console.log('Successfully received audio from ElevenLabs, streaming to client...');
 
         // Return audio stream
         return new Response(elevenLabsResponse.body, {

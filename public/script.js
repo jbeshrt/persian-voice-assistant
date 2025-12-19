@@ -218,6 +218,8 @@ class PersianVoiceAssistant {
         this.responseBox.textContent = text;
 
         try {
+            console.log('Calling TTS API with text:', text.substring(0, 50) + '...');
+            
             // Call ElevenLabs TTS API through our Pages Function
             const response = await fetch('/api/elevenlabs', {
                 method: 'POST',
@@ -227,29 +229,47 @@ class PersianVoiceAssistant {
                 body: JSON.stringify({ text })
             });
 
+            console.log('TTS API Response status:', response.status, response.statusText);
+
             if (!response.ok) {
-                throw new Error('TTS request failed');
+                const errorText = await response.text();
+                console.error('TTS API error response:', errorText);
+                throw new Error(`TTS request failed: ${response.status} - ${errorText}`);
             }
 
             // Get audio blob and play it
             const audioBlob = await response.blob();
+            console.log('Audio blob received:', audioBlob.size, 'bytes, type:', audioBlob.type);
+            
             const audioUrl = URL.createObjectURL(audioBlob);
             const audio = new Audio(audioUrl);
+            
+            console.log('Starting audio playback...');
 
             return new Promise((resolve) => {
                 audio.onended = () => {
+                    console.log('Audio playback completed');
                     URL.revokeObjectURL(audioUrl);
                     this.updateStatus('آماده شنیدن', 'ready');
                     resolve();
                 };
-                audio.onerror = () => {
-                    console.error('Audio playback error');
+                audio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    console.error('Audio error details:', audio.error);
                     this.updateStatus('خطا در پخش صدا', 'error');
                     resolve();
                 };
-                audio.play().catch(error => {
-                    console.error('Audio play error:', error);
-                    // Browser might block autoplay
+                audio.onloadeddata = () => {
+                    console.log('Audio data loaded, duration:', audio.duration);
+                };
+                audio.play().then(() => {
+                    console.log('Audio play() succeeded');
+                }).catch(error => {
+                    console.error('Audio play() error:', error);
+                    console.error('Error name:', error.name);
+                    console.error('Error message:', error.message);
+                    // Browser might block autoplay - show message to user
+                    alert('لطفا برای پخش صدا، دکمه را کلیک کنید. مرورگر پخش خودکار را مسدود کرده است.');
                     this.updateStatus('آماده شنیدن', 'ready');
                     resolve();
                 });
@@ -257,6 +277,7 @@ class PersianVoiceAssistant {
 
         } catch (error) {
             console.error('TTS error:', error);
+            console.error('Error stack:', error.stack);
             console.log('Fallback: Text displayed without audio');
             this.updateStatus('آماده شنیدن', 'ready');
         }
