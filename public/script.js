@@ -701,7 +701,8 @@ class PersianVoiceAssistant {
         
         if (!this.cardData.cvv2) {
             this.currentCardField = 'cvv2';
-            const msg = `بسیار خوب. شماره کارت ${this.maskCardNumber(this.cardData.cardNumber)} ثبت شد. حالا لطفا سی وی وی دو یا کد امنیتی سه یا چهار رقمی پشت کارت را بگویید`;
+            const lastFour = this.readDigitByDigit(this.cardData.cardNumber.slice(-4));
+            const msg = `بسیار خوب. شماره کارت با اعداد ${lastFour} ثبت شد. حالا لطفا سی وی وی دو یا کد امنیتی سه یا چهار رقمی پشت کارت را بگویید`;
             await this.speak(msg);
             this.updateStatus('در انتظار CVV2', 'listening');
             return;
@@ -709,7 +710,8 @@ class PersianVoiceAssistant {
         
         if (!this.cardData.expireMonth) {
             this.currentCardField = 'expireMonth';
-            const msg = `عالی. سی وی وی دو ${this.cardData.cvv2} ثبت شد. حالا لطفا ماه انقضای کارت را دو رقمی بگویید. مثال: صفر نه برای ماه سپتامبر یا یک صفر برای ماه اکتبر`;
+            const cvv = this.readDigitByDigit(this.cardData.cvv2);
+            const msg = `عالی. سی وی وی دو ${cvv} ثبت شد. حالا لطفا ماه انقضای کارت را دو رقمی بگویید. مثال: صفر نه یعنی ماه نه`;
             await this.speak(msg);
             this.updateStatus('در انتظار ماه انقضا', 'listening');
             return;
@@ -717,7 +719,8 @@ class PersianVoiceAssistant {
         
         if (!this.cardData.expireYear) {
             this.currentCardField = 'expireYear';
-            const msg = `خوب. ماه ${this.cardData.expireMonth} ثبت شد. حالا لطفا سال انقضای کارت را دو رقمی بگویید. مثال: صفر پنج برای سال ۲۰۰۵ یا دو شش برای سال ۲۰۲۶`;
+            const month = this.readDigitByDigit(this.cardData.expireMonth);
+            const msg = `خوب. ماه ${month} ثبت شد. حالا لطفا سال انقضای کارت را دو رقمی بگویید. مثال: صفر پنج یعنی سال پنج`;
             await this.speak(msg);
             this.updateStatus('در انتظار سال انقضا', 'listening');
             return;
@@ -725,10 +728,15 @@ class PersianVoiceAssistant {
         
         // All data collected - read back with full context for confirmation
         this.currentCardField = null;
+        const lastFour = this.readDigitByDigit(this.cardData.cardNumber.slice(-4));
+        const cvv = this.readDigitByDigit(this.cardData.cvv2);
+        const month = this.readDigitByDigit(this.cardData.expireMonth);
+        const year = this.readDigitByDigit(this.cardData.expireYear);
+        
         const confirmMsg = `اطلاعات کارت شما کامل شد. اجازه بدهید بررسی کنم: 
-                           شماره کارت: ${this.maskCardNumber(this.cardData.cardNumber)}, 
-                           کد امنیتی سی وی وی دو: ${this.cardData.cvv2}, 
-                           تاریخ انقضا: ماه ${this.cardData.expireMonth} سال ${this.cardData.expireYear}. 
+                           شماره کارت با اعداد آخر ${lastFour}، 
+                           کد امنیتی سی وی وی دو ${cvv}، 
+                           تاریخ انقضا ماه ${month} سال ${year}. 
                            آیا این اطلاعات را تایید می‌کنید؟ لطفا بله یا خیر بگویید.`;
         
         await this.speak(confirmMsg);
@@ -743,9 +751,30 @@ class PersianVoiceAssistant {
         const cleanText = text.trim();
         
         // Extract 16-digit card number (with or without spaces)
-        const cardMatch = cleanText.match(/(\d{16})|(\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/);
-        if (cardMatch) {
-            info.cardNumber = cardMatch[0].replace(/\s/g, '');
+        // Try multiple patterns to catch different speech recognition outputs
+        const cardPatterns = [
+            /(\d{16})/,                                    // 1234567890123456
+            /(\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/,           // 1234 5678 9012 3456
+            /(\d{4}-\d{4}-\d{4}-\d{4})/,                 // 1234-5678-9012-3456
+        ];
+        
+        for (const pattern of cardPatterns) {
+            const cardMatch = cleanText.match(pattern);
+            if (cardMatch) {
+                const digits = cardMatch[0].replace(/[^0-9]/g, '');
+                if (digits.length === 16) {
+                    info.cardNumber = digits;
+                    break;
+                }
+            }
+        }
+        
+        // If we're specifically asking for card number and got 16 digits anywhere in text
+        if (!info.cardNumber && this.currentCardField === 'cardNumber') {
+            const allDigits = cleanText.replace(/[^0-9]/g, '');
+            if (allDigits.length === 16) {
+                info.cardNumber = allDigits;
+            }
         }
         
         // Extract CVV2 (3-4 digits) - multiple patterns
@@ -823,6 +852,38 @@ class PersianVoiceAssistant {
     maskCardNumber(cardNumber) {
         if (!cardNumber || cardNumber.length < 4) return '****';
         return '**** **** **** ' + cardNumber.slice(-4);
+    }
+
+    readDigitByDigit(number) {
+        // Convert number to Persian digit-by-digit reading
+        const persianDigits = {
+            '0': 'صفر',
+            '1': 'یک',
+            '2': 'دو',
+            '3': 'سه',
+            '4': 'چهار',
+            '5': 'پنج',
+            '6': 'شش',
+            '7': 'هفت',
+            '8': 'هشت',
+            '9': 'نه'
+        };
+        
+        return String(number).split('').map(digit => persianDigits[digit] || digit).join(' ');
+    }
+
+    readCardNumberGrouped(cardNumber) {
+        // Read card number in 4-digit groups
+        if (!cardNumber || cardNumber.length !== 16) return '';
+        
+        const groups = [
+            cardNumber.slice(0, 4),
+            cardNumber.slice(4, 8),
+            cardNumber.slice(8, 12),
+            cardNumber.slice(12, 16)
+        ];
+        
+        return groups.map(group => this.readDigitByDigit(group)).join('، ');
     }
 
     async saveCard(cardData) {
