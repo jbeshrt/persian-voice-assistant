@@ -51,7 +51,7 @@ export async function onRequestPost(context) {
 
         // Call ElevenLabs API via Cloudflare AI Gateway with optimized Persian settings
         const elevenLabsResponse = await fetch(
-            `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/${GATEWAY_ID}/elevenlabs/v1/text-to-speech/${VOICE_ID}?output_format=mp3_44100_192`,
+            `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/${GATEWAY_ID}/elevenlabs/v1/text-to-speech/${VOICE_ID}`,
             {
                 method: 'POST',
                 headers: {
