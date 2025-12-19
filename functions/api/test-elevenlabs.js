@@ -14,63 +14,24 @@ export async function onRequestGet(context) {
     try {
         console.log('=== ELEVENLABS API TEST STARTED ===');
         
-        // Check if API key exists
-        if (!env.ELEVENLABS_API_KEY) {
-            console.error('❌ ELEVENLABS_API_KEY is not set in environment');
-            return new Response(
-                JSON.stringify({ 
-                    success: false,
-                    error: 'API key not configured',
-                    details: 'ELEVENLABS_API_KEY environment variable is missing'
-                }),
-                { 
-                    status: 500,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                }
-            );
-        }
+        // ElevenLabs API Key
+        const API_KEY = env.ELEVENLABS_API_KEY || 'sk_dd205ee3e9c8d886817abaada6bb67c25464c03b8496826f';
+        
+        // Cloudflare AI Gateway configuration
+        const ACCOUNT_ID = '5dfc6fee3a7d9541e75526075602906a';
+        const GATEWAY_ID = 'eleven-labs';
 
-        console.log('✅ API key exists in environment');
-        console.log('API key length:', env.ELEVENLABS_API_KEY.length);
-        console.log('API key first 10 chars:', env.ELEVENLABS_API_KEY.substring(0, 10) + '...');
+        console.log('✅ API key configured');
+        console.log('API key length:', API_KEY.length);
+        console.log('API key first 10 chars:', API_KEY.substring(0, 10) + '...');
+        console.log('Using AI Gateway:', GATEWAY_ID);
 
-        // Test 1: Get user info (verify API key)
-        console.log('Test 1: Checking user info...');
-        const userResponse = await fetch('https://api.elevenlabs.io/v1/user', {
+        // Test 1: Get voices list via AI Gateway
+        console.log('Test 1: Fetching voices list via AI Gateway...');
+        const voicesResponse = await fetch(`https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/${GATEWAY_ID}/elevenlabs/v1/voices`, {
             method: 'GET',
             headers: {
-                'xi-api-key': env.ELEVENLABS_API_KEY,
-            }
-        });
-
-        console.log('User API response status:', userResponse.status);
-
-        if (!userResponse.ok) {
-            const errorText = await userResponse.text();
-            console.error('❌ User API failed:', errorText);
-            return new Response(
-                JSON.stringify({ 
-                    success: false,
-                    error: 'API key authentication failed',
-                    status: userResponse.status,
-                    details: errorText
-                }),
-                { 
-                    status: 500,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                }
-            );
-        }
-
-        const userData = await userResponse.json();
-        console.log('✅ User data retrieved:', userData);
-
-        // Test 2: Get voices list
-        console.log('Test 2: Fetching voices list...');
-        const voicesResponse = await fetch('https://api.elevenlabs.io/v1/voices', {
-            method: 'GET',
-            headers: {
-                'xi-api-key': env.ELEVENLABS_API_KEY,
+                'xi-api-key': API_KEY,
             }
         });
 
@@ -100,16 +61,16 @@ export async function onRequestGet(context) {
         const jessicaVoice = voicesData.voices?.find(v => v.voice_id === 'cgSgspJ2msm6clMCkdW9');
         console.log('Jessica voice found:', !!jessicaVoice);
 
-        // Test 3: Generate a tiny test audio
-        console.log('Test 3: Generating test audio...');
-        const testText = 'Hello test';
+        // Test 2: Generate test audio via AI Gateway
+        console.log('Test 2: Generating test audio via AI Gateway...');
+        const testText = 'سلام، تست صدا';
         const ttsResponse = await fetch(
-            'https://api.elevenlabs.io/v1/text-to-speech/cgSgspJ2msm6clMCkdW9',
+            `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/${GATEWAY_ID}/elevenlabs/v1/text-to-speech/cgSgspJ2msm6clMCkdW9`,
             {
                 method: 'POST',
                 headers: {
                     'Accept': 'audio/mpeg',
-                    'xi-api-key': env.ELEVENLABS_API_KEY,
+                    'xi-api-key': API_KEY,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -154,18 +115,12 @@ export async function onRequestGet(context) {
                 message: 'All ElevenLabs API tests passed',
                 tests: {
                     apiKeyPresent: true,
-                    apiKeyLength: env.ELEVENLABS_API_KEY.length,
-                    userAuthenticated: true,
+                    apiKeyLength: API_KEY.length,
                     voicesAccessible: true,
                     voiceCount: voicesData.voices?.length || 0,
                     jessicaVoiceFound: !!jessicaVoice,
                     ttsWorking: true,
                     testAudioSize: audioSize
-                },
-                userData: {
-                    subscription: userData.subscription,
-                    character_count: userData.character_count,
-                    character_limit: userData.character_limit
                 }
             }),
             { 

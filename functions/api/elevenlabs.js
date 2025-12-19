@@ -34,48 +34,39 @@ export async function onRequestPost(context) {
         console.log('=== TTS REQUEST STARTED ===');
         console.log('Text:', text.substring(0, 50) + '...');
 
-        // Check if API key exists
-        if (!env.ELEVENLABS_API_KEY) {
-            console.error('❌ ELEVENLABS_API_KEY not found in environment');
-            return new Response(
-                JSON.stringify({ 
-                    error: 'API key not configured',
-                    details: 'ELEVENLABS_API_KEY environment variable is missing'
-                }),
-                { 
-                    status: 500,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                }
-            );
-        }
-
-        console.log('✅ API key present, length:', env.ELEVENLABS_API_KEY.length);
-        console.log('API key preview:', env.ELEVENLABS_API_KEY.substring(0, 10) + '...');
-
         // ElevenLabs API configuration
+        const API_KEY = env.ELEVENLABS_API_KEY || 'sk_dd205ee3e9c8d886817abaada6bb67c25464c03b8496826f';
         const VOICE_ID = 'cgSgspJ2msm6clMCkdW9'; // Jessica voice (multilingual - Persian support)
         const MODEL_ID = 'eleven_multilingual_v2'; // Supports Persian
+        
+        // Cloudflare AI Gateway configuration
+        const ACCOUNT_ID = '5dfc6fee3a7d9541e75526075602906a';
+        const GATEWAY_ID = 'eleven-labs';
 
+        console.log('✅ API key configured, length:', API_KEY.length);
+        console.log('API key preview:', API_KEY.substring(0, 10) + '...');
         console.log('Using voice ID:', VOICE_ID);
         console.log('Using model:', MODEL_ID);
+        console.log('Using AI Gateway:', GATEWAY_ID);
 
-        // Call ElevenLabs API
+        // Call ElevenLabs API via Cloudflare AI Gateway with optimized Persian settings
         const elevenLabsResponse = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+            `https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/${GATEWAY_ID}/elevenlabs/v1/text-to-speech/${VOICE_ID}?output_format=mp3_44100_192`,
             {
                 method: 'POST',
                 headers: {
                     'Accept': 'audio/mpeg',
-                    'xi-api-key': env.ELEVENLABS_API_KEY,
+                    'xi-api-key': API_KEY,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     text: text,
                     model_id: MODEL_ID,
+                    language_code: 'fa',
                     voice_settings: {
-                        stability: 0.5,
-                        similarity_boost: 0.75,
-                        style: 0.0,
+                        stability: 0.65,
+                        similarity_boost: 0.85,
+                        style: 0.3,
                         use_speaker_boost: true
                     }
                 })

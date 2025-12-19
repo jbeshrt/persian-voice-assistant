@@ -9,3 +9,8 @@ pages_build_output_dir = "public"
 binding = "DB"
 database_name = "persian_payments"
 database_id = "d1c558d5-c0d8-41f0-8b1c-7411b72c7d35"
+
+# Environment variables (for production, set in Cloudflare Dashboard)
+# For local development, use .dev.vars file
+[vars]
+# ELEVENLABS_API_KEY is set via dashboard for production
