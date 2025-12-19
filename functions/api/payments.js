@@ -20,9 +20,19 @@ export async function onRequestPost(context) {
     try {
         // Get payment data from request
         const paymentData = await request.json();
-        const { cardNumber, amount, currency, transcript, sessionId } = paymentData;
+        const { token, cardNumber, amount, currency, transcript, sessionId } = paymentData;
 
         // Validate required fields
+        if (!token || token.length !== 16) {
+            return new Response(
+                JSON.stringify({ error: 'Valid 16-character token is required' }),
+                { 
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                }
+            );
+        }
+
         if (!cardNumber || !amount) {
             return new Response(
                 JSON.stringify({ error: 'Card number and amount are required' }),
@@ -33,7 +43,20 @@ export async function onRequestPost(context) {
             );
         }
 
-        console.log('Logging payment:', {
+        // Get or create user by token
+        let user = await env.DB.prepare(
+            'SELECT id FROM users WHERE token = ?'
+        ).bind(token).first();
+
+        if (!user) {
+            // Create new user if doesn't exist
+            const newUser = await env.DB.prepare(
+                'INSERT INTO users (token) VALUES (?) RETURNING id'
+            ).bind(token).first();
+            user = newUser;
+        }
+
+        console.log('Logging payment for user:', user.id, {
             card: cardNumber,
             amount,
             currency: currency || 'IRR',
@@ -43,10 +66,11 @@ export async function onRequestPost(context) {
         // Insert into D1 database
         const result = await env.DB.prepare(
             `INSERT INTO payments 
-            (card_number, amount, currency, payment_type, voice_transcript, session_id, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`
+            (user_id, card_number, amount, currency, payment_type, voice_transcript, session_id, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .bind(
+            user.id,
             cardNumber,
             amount,
             currency || 'IRR',

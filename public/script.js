@@ -7,11 +7,93 @@ class PersianVoiceAssistant {
         this.sessionId = this.generateSessionId();
         this.currentTranscript = '';
         this.lastLoggedTime = -1;
+        this.userToken = null;
+        this.userId = null;
         
+        this.initToken();
         this.initElements();
         this.initSpeechRecognition();
         this.bindEvents();
-        this.speak('سلام! من دستیار پرداخت صوتی هستم. آماده کمک به شما می‌باشم.');
+        this.loadUserData();
+    }
+
+    initToken() {
+        // Get token from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        let token = urlParams.get('token');
+
+        // If no token in URL, check localStorage
+        if (!token) {
+            token = localStorage.getItem('userToken');
+        }
+
+        // If still no token, generate new 16-character token
+        if (!token || token.length !== 16) {
+            token = this.generateToken();
+            // Update URL with new token
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('token', token);
+            window.history.replaceState({}, '', newUrl);
+        }
+
+        // Store token
+        this.userToken = token;
+        localStorage.setItem('userToken', token);
+        console.log('User token:', token.substring(0, 4) + '...');
+    }
+
+    generateToken() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let token = '';
+        for (let i = 0; i < 16; i++) {
+            token += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return token;
+    }
+
+    async loadUserData() {
+        try {
+            console.log('Loading user data for token:', this.userToken.substring(0, 4) + '...');
+            
+            const response = await fetch(`/api/user?token=${this.userToken}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.userId = data.user.id;
+                console.log('User loaded:', data.user);
+                console.log('Transaction count:', data.transaction_count);
+
+                // Display transaction history
+                if (data.transactions && data.transactions.length > 0) {
+                    this.displayTransactionHistory(data.transactions);
+                }
+
+                this.speak('سلام! من دستیار پرداخت صوتی هستم. آماده کمک به شما می‌باشم.');
+            } else {
+                console.error('Failed to load user:', data.error);
+                this.speak('سلام! من دستیار پرداخت صوتی هستم. آماده کمک به شما می‌باشم.');
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+            this.speak('سلام! من دستیار پرداخت صوتی هستم. آماده کمک به شما می‌باشم.');
+        }
+    }
+
+    displayTransactionHistory(transactions) {
+        this.paymentLog.innerHTML = '';
+        
+        transactions.forEach(tx => {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <div class="log-time">${new Date(tx.timestamp).toLocaleString('fa-IR')}</div>
+                <div class="log-details">
+                    💳 کارت: ${tx.card_number} | 💰 مبلغ: ${tx.amount.toLocaleString('fa-IR')} ${tx.currency}
+                </div>
+                ${tx.voice_transcript ? `<div class="log-transcript">📝 ${tx.voice_transcript}</div>` : ''}
+            `;
+            this.paymentLog.appendChild(logEntry);
+        });
     }
 
     initElements() {
@@ -231,8 +313,7 @@ class PersianVoiceAssistant {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    cardNumber: maskedCard,
+                body: JSON.stringify({                    token: this.userToken,                    cardNumber: maskedCard,
                     amount: paymentData.amount,
                     currency: paymentData.currency,
                     transcript: paymentData.transcript,
