@@ -111,15 +111,22 @@ class PersianVoiceAssistant {
     initElements() {
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
-        this.testBtn = document.getElementById('testBtn');
-        this.testApiBtn = document.getElementById('testApiBtn');
         this.addCardBtn = document.getElementById('addCardBtn');
         this.statusText = document.getElementById('statusText');
-        this.statusIndicator = document.getElementById('statusIndicator').querySelector('.pulse');
-        this.transcriptBox = document.getElementById('transcript');
-        this.responseBox = document.getElementById('response');
         this.paymentLog = document.getElementById('paymentLog');
         this.cardsContainer = document.getElementById('savedCards');
+        this.orbContainer = document.getElementById('orbContainer');
+        
+        // Start listening automatically when orb is clicked
+        if (this.orbContainer) {
+            this.orbContainer.addEventListener('click', () => {
+                if (!this.recognition || !this.isListening) {
+                    this.startListening();
+                } else {
+                    this.stopListening();
+                }
+            });
+        }
     }
 
     initSpeechRecognition() {
@@ -560,16 +567,22 @@ class PersianVoiceAssistant {
 
     addPaymentToLog(payment) {
         const paymentItem = document.createElement('div');
-        paymentItem.className = 'payment-item';
+        paymentItem.className = 'transaction-item';
         
-        const time = new Date(payment.timestamp).toLocaleString('fa-IR');
+        const time = new Date(payment.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+        const amount = this.formatAmount(payment.amount);
         
         paymentItem.innerHTML = `
-            <div class="time">⏰ ${time}</div>
-            <div class="details">
-                💳 کارت: ${payment.cardNumber}<br>
-                💰 مبلغ: ${this.formatAmount(payment.amount)} تومان<br>
-                📝 متن: ${payment.transcript}
+            <div class="transaction-left">
+                <div class="transaction-icon">💳</div>
+                <div class="transaction-info">
+                    <h4>پرداخت آنلاین</h4>
+                    <div class="transaction-status">تکمیل شده</div>
+                </div>
+            </div>
+            <div class="transaction-right">
+                <div class="transaction-amount negative">-${amount}</div>
+                <div class="transaction-time">${time}</div>
             </div>
         `;
         
@@ -581,19 +594,28 @@ class PersianVoiceAssistant {
     }
 
     updateStatus(text, state = 'ready') {
-        this.statusText.textContent = text;
-        this.statusIndicator.className = 'pulse';
+        if (this.statusText) {
+            this.statusText.textContent = text;
+        }
         
-        if (state === 'listening') {
-            this.statusIndicator.classList.add('listening');
-        } else if (state === 'speaking') {
-            this.statusIndicator.classList.add('speaking');
+        if (this.orbContainer) {
+            this.orbContainer.className = 'orb-container';
+            
+            if (state === 'listening') {
+                this.orbContainer.classList.add('listening');
+            } else if (state === 'speaking') {
+                this.orbContainer.classList.add('speaking');
+            } else if (state === 'inactive') {
+                this.orbContainer.classList.add('inactive');
+            } else {
+                this.orbContainer.classList.add('active');
+            }
         }
     }
 
     showError(message) {
-        this.responseBox.textContent = `❌ ${message}`;
         console.error(message);
+        this.updateStatus('خطا: ' + message, 'inactive');
     }
 
     generateSessionId() {
@@ -608,28 +630,38 @@ class PersianVoiceAssistant {
         this.cardsContainer.innerHTML = '';
         
         if (this.savedCards.length === 0) {
-            this.cardsContainer.innerHTML = '<p class="no-cards">هیچ کارتی ذخیره نشده است</p>';
-            return;
+            return; // Don't show anything if no cards
         }
         
         this.savedCards.forEach(card => {
             const cardEl = document.createElement('div');
-            cardEl.className = 'saved-card';
+            cardEl.className = 'card-item';
             cardEl.innerHTML = `
-                <div class="card-info">
-                    <span class="card-number">**** **** **** ${card.last_four}</span>
-                    <span class="card-expiry">انقضا: ${card.expire_month}/${card.expire_year}</span>
-                    ${card.card_name ? `<span class="card-name">${card.card_name}</span>` : ''}
-                    ${card.is_default ? '<span class="badge">پیش‌فرض</span>' : ''}
+                <button class="delete-card" data-id="${card.id}">×</button>
+                <div class="card-header">
+                    <div class="card-icons">
+                        <div class="card-icon"></div>
+                        <div class="card-icon"></div>
+                    </div>
+                    <div class="contactless-icon">📡</div>
                 </div>
-                <button class="delete-card-btn" data-id="${card.id}">🗑️</button>
+                <div class="card-balance">
+                    <div class="balance-label">موجودی قابل استفاده</div>
+                    <div class="balance-amount">---</div>
+                </div>
+                <div class="card-details">
+                    <div class="card-number">****${card.last_four}</div>
+                    <div class="card-expiry">${card.expire_month}/${card.expire_year}</div>
+                </div>
+                <div class="card-cvv">CVV: ***</div>
             `;
             this.cardsContainer.appendChild(cardEl);
         });
         
         // Add delete handlers
-        document.querySelectorAll('.delete-card-btn').forEach(btn => {
+        document.querySelectorAll('.delete-card').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 this.deleteCard(e.target.dataset.id);
             });
         });

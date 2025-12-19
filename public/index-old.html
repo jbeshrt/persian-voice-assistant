@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دستیار پرداخت صوتی - Persian Voice Payment Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 دستیار پرداخت صوتی</h1>
+            <p class="subtitle">Persian Voice Payment Assistant</p>
+        </header>
+
+        <main>
+            <!-- Status Section -->
+            <div class="status-card">
+                <div class="status-indicator" id="statusIndicator">
+                    <div class="pulse"></div>
+                    <span id="statusText">آماده شنیدن</span>
+                </div>
+            </div>
+
+            <!-- Voice Control -->
+            <div class="control-section">
+                <button id="startBtn" class="btn btn-primary">
+                    <span class="icon">🎙️</span>
+                    شروع گفتگو
+                </button>
+                <button id="stopBtn" class="btn btn-secondary" disabled>
+                    <span class="icon">⏹️</span>
+                    توقف
+                </button>
+                <button id="testBtn" class="btn btn-test">
+                    <span class="icon">🧪</span>
+                    تست صدا
+                </button>
+                <button id="testApiBtn" class="btn btn-test">
+                    <span class="icon">🔌</span>
+                    تست API
+                </button>
+            </div>
+
+            <!-- Transcript Display -->
+            <div class="transcript-section">
+                <h3>متن شما:</h3>
+                <div id="transcript" class="transcript-box">
+                    منتظر ورودی صوتی...
+                </div>
+            </div>
+
+            <!-- Assistant Response -->
+            <div class="response-section">
+                <h3>پاسخ دستیار:</h3>
+                <div id="response" class="response-box">
+                    سلام! من دستیار پرداخت صوتی هستم. برای پرداخت آنلاین، لطفا شماره کارت و مبلغ را بگویید.
+                </div>
+            </div>
+
+            <!-- Payment Log -->
+            <div class="log-section">
+                <h3>تراکنش‌های ثبت شده:</h3>
+                <div id="paymentLog" class="log-box">
+                    <!-- Payments will be added here -->
+                </div>
+            </div>
+
+            <!-- Saved Cards Section -->
+            <div class="cards-section">
+                <div class="section-header">
+                    <h3>💳 کارت‌های ذخیره شده</h3>
+                    <button id="addCardBtn" class="btn btn-small">
+                        <span class="icon">➕</span>
+                        افزودن کارت جدید
+                    </button>
+                </div>
+                <div id="savedCards" class="cards-container">
+                    <!-- Cards will be added here -->
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="instructions">
+                <h4>راهنما:</h4>
+                <ul>
+                    <li>برای شروع روی دکمه "شروع گفتگو" کلیک کنید</li>
+                    <li>اجازه دسترسی به میکروفون را بدهید</li>
+                    <li>مثال: "پرداخت آنلاین، شماره کارت ۱۲۳۴ ۵۶۷۸ ۹۰۱۲ ۳۴۵۶، مبلغ ۵۰۰ هزار تومان"</li>
+                    <li>دستیار اطلاعات را تایید کرده و ثبت می‌کند</li>
+                </ul>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Cloudflare Pages + ElevenLabs + Web Speech API</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
