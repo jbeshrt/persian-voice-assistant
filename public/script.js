@@ -116,11 +116,27 @@ class PersianVoiceAssistant {
         this.paymentLog = document.getElementById('paymentLog');
         this.cardsContainer = document.getElementById('savedCards');
         this.orbContainer = document.getElementById('orbContainer');
+        this.isProcessing = false;
+        this.lastClickTime = 0;
         
-        // Start listening automatically when orb is clicked
+        // Start listening when orb is clicked (with debouncing)
         if (this.orbContainer) {
             this.orbContainer.addEventListener('click', () => {
-                if (!this.recognition || !this.isListening) {
+                const now = Date.now();
+                // Debounce clicks (prevent rapid clicking)
+                if (now - this.lastClickTime < 1000) {
+                    console.log('Click ignored - too fast');
+                    return;
+                }
+                this.lastClickTime = now;
+                
+                // Don't interrupt if processing
+                if (this.isProcessing) {
+                    console.log('Currently processing, please wait');
+                    return;
+                }
+                
+                if (!this.isListening) {
                     this.startListening();
                 } else {
                     this.stopListening();
@@ -147,6 +163,7 @@ class PersianVoiceAssistant {
         // Event handlers
         this.recognition.onstart = () => {
             console.log('Speech recognition started');
+            this.isListening = true;
             this.updateStatus('در حال گوش دادن...', 'listening');
         };
 
@@ -154,21 +171,25 @@ class PersianVoiceAssistant {
             const transcript = event.results[0][0].transcript;
             console.log('Transcript:', transcript);
             this.currentTranscript = transcript;
-            this.transcriptBox.textContent = transcript;
+            // Stop listening immediately after getting result
+            this.isListening = false;
+            this.updateStatus('در حال پردازش...', 'speaking');
             this.processCommand(transcript);
         };
 
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
+            this.isListening = false;
             this.updateStatus('خطا در تشخیص گفتار', 'error');
             this.showError(`خطا: ${event.error}`);
-            this.stopListening();
         };
 
         this.recognition.onend = () => {
-            console.log('Speech recognition ended');
+            console.log('Speech recognition ended, isListening:', this.isListening);
+            // Just set the flag, don't restart automatically
             if (this.isListening) {
-                this.stopListening();
+                this.isListening = false;
+                this.updateStatus('آماده شنیدن (کلیک کنید)', 'ready');
             }
         };
     }
@@ -243,36 +264,58 @@ class PersianVoiceAssistant {
             return;
         }
 
+        // Prevent starting if already listening
+        if (this.isListening) {
+            console.log('Already listening, ignoring start request');
+            return;
+        }
+
         try {
+            console.log('Starting speech recognition...');
             this.recognition.start();
             this.isListening = true;
             this.startBtn.disabled = true;
             this.stopBtn.disabled = false;
         } catch (error) {
             console.error('Error starting recognition:', error);
+            this.isListening = false;
             this.showError('خطا در شروع تشخیص گفتار');
         }
     }
 
     stopListening() {
+        console.log('Stopping speech recognition...');
         if (this.recognition && this.isListening) {
-            this.recognition.stop();
+            try {
+                this.recognition.stop();
+            } catch (error) {
+                console.log('Stop error (safe to ignore):', error);
+            }
         }
         this.isListening = false;
         this.startBtn.disabled = false;
         this.stopBtn.disabled = true;
-        this.updateStatus('آماده شنیدن', 'ready');
+        this.updateStatus('آماده شنیدن (کلیک کنید)', 'ready');
     }
 
     async processCommand(transcript) {
-        // Handle card collection mode first
-        if (this.cardCollectionMode) {
-            await this.handleCardCollection(transcript);
+        // Prevent processing multiple commands at once
+        if (this.isProcessing) {
+            console.log('Already processing a command, ignoring...');
             return;
         }
+        
+        this.isProcessing = true;
+        
+        try {
+            // Handle card collection mode first
+            if (this.cardCollectionMode) {
+                await this.handleCardCollection(transcript);
+                return;
+            }
 
-        // Simple payment detection (looking for keywords)
-        const lowerTranscript = transcript.toLowerCase();
+            // Simple payment detection (looking for keywords)
+            const lowerTranscript = transcript.toLowerCase();
         
         // Check if it's a payment command
         if (this.containsPaymentKeywords(lowerTranscript)) {
@@ -292,6 +335,11 @@ class PersianVoiceAssistant {
         } else {
             // General conversation
             await this.speak('برای پرداخت آنلاین، لطفا بگویید: پرداخت آنلاین، شماره کارت و مبلغ مورد نظر.');
+        }
+        } finally {
+            // Always clear processing flag
+            this.isProcessing = false;
+            console.log('Command processing complete');
         }
     }
 
@@ -678,6 +726,8 @@ class PersianVoiceAssistant {
     }
 
     async handleCardCollection(transcript) {
+        console.log('Handling card collection:', transcript);
+        
         // If waiting for confirmation
         if (this.waitingForCardConfirmation) {
             if (transcript.includes('بله') || transcript.includes('تایید') || transcript.includes('آره')) {
@@ -685,6 +735,7 @@ class PersianVoiceAssistant {
                 this.cardCollectionMode = false;
                 this.waitingForCardConfirmation = false;
                 this.currentCardField = null;
+                this.isProcessing = false;
                 return;
             } else if (transcript.includes('خیر') || transcript.includes('نه')) {
                 this.cardCollectionMode = false;
@@ -692,6 +743,7 @@ class PersianVoiceAssistant {
                 this.cardData = {};
                 this.currentCardField = null;
                 await this.speak('عملیات لغو شد');
+                this.isProcessing = false;
                 return;
             }
         }
