@@ -18,6 +18,7 @@ class PersianVoiceAssistant {
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.testBtn = document.getElementById('testBtn');
+        this.testApiBtn = document.getElementById('testApiBtn');
         this.statusText = document.getElementById('statusText');
         this.statusIndicator = document.getElementById('statusIndicator').querySelector('.pulse');
         this.transcriptBox = document.getElementById('transcript');
@@ -73,6 +74,39 @@ class PersianVoiceAssistant {
         this.startBtn.addEventListener('click', () => this.startListening());
         this.stopBtn.addEventListener('click', () => this.stopListening());
         this.testBtn.addEventListener('click', () => this.testAudio());
+        this.testApiBtn.addEventListener('click', () => this.testApiConnection());
+    }
+
+    async testApiConnection() {
+        console.log('=== API CONNECTION TEST STARTED ===');
+        this.testApiBtn.disabled = true;
+        this.transcriptBox.textContent = 'در حال تست اتصال API...';
+        this.responseBox.textContent = 'لطفا صبر کنید...';
+        
+        try {
+            const response = await fetch('/api/test-elevenlabs');
+            const result = await response.json();
+            
+            console.log('API Test Result:', result);
+            
+            if (result.success) {
+                this.transcriptBox.textContent = '✅ اتصال موفق';
+                this.responseBox.textContent = `API کار می‌کند!\n` +
+                    `تعداد صداها: ${result.tests.voiceCount}\n` +
+                    `صدای Jessica: ${result.tests.jessicaVoiceFound ? 'موجود' : 'نا موجود'}\n` +
+                    `اعتبار: ${result.userData.subscription?.tier || 'N/A'}\n` +
+                    `کاراکترهای باقیمانده: ${result.userData.character_count}/${result.userData.character_limit}`;
+            } else {
+                this.transcriptBox.textContent = '❌ خطا در اتصال';
+                this.responseBox.textContent = `خطا: ${result.error}\n${result.details || ''}`;
+            }
+        } catch (error) {
+            console.error('API Test Error:', error);
+            this.transcriptBox.textContent = '❌ خطا';
+            this.responseBox.textContent = `خطا: ${error.message}`;
+        } finally {
+            this.testApiBtn.disabled = false;
+        }
     }
 
     async testAudio() {
